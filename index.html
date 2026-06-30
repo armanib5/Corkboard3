@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CorkBoard — Downtown San Jose</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Franklin:wght@400;500;600;700&display=swap');
+
+  :root{
+    --paper2:#fdf8ec;
+    --ink:#2b2420;
+    --pin-red:#b8413a;
+    --pin-blue:#3c5a73;
+    --pin-green:#4f6b4a;
+    --pin-gold:#a9821f;
+    --pin-purple:#6a4e7a;
+    --frame:#1c1714;
+    --frame-grain:#2a221c;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    font-family:'Libre Franklin',sans-serif;
+    background:#3a342e;
+    color:var(--ink);
+  }
+
+  .topnav{display:flex;justify-content:center;gap:8px;padding:14px;}
+  .topnav button{
+    font-family:'Special Elite';
+    background:#54493e;
+    color:#e8ddc9;
+    border:none;
+    padding:9px 18px;
+    cursor:pointer;
+    opacity:0.7;
+  }
+  .topnav button.active{opacity:1;background:var(--frame);}
+
+  header{text-align:center;padding:10px 16px;}
+  header h1{
+    font-family:'Special Elite';
+    color:#f0e6d2;
+    font-size:40px;
+  }
+
+  .filters{
+    display:flex;
+    justify-content:center;
+    gap:8px;
+    flex-wrap:wrap;
+    padding:10px;
+  }
+
+  .chip{
+    background:#54493e;
+    color:#e8ddc9;
+    border:none;
+    border-radius:20px;
+    padding:7px 14px;
+    cursor:pointer;
+    opacity:0.7;
+  }
+  .chip.active{opacity:1;}
+
+  .frame-wrap{max-width:1000px;margin:auto;padding:10px;}
+
+  .cork{
+    background:#c9a877;
+    padding:20px;
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:20px;
+    border-radius:4px;
+  }
+
+  .flyer{
+    background:var(--paper2);
+    padding:10px;
+    position:relative;
+    cursor:pointer;
+  }
+
+  .flyer.hidden{display:none;}
+
+  .pin-dot{
+    width:14px;height:14px;border-radius:50%;
+    position:absolute;top:-7px;left:50%;
+    transform:translateX(-50%);
+  }
+
+  .market{background:var(--pin-green);}
+  .foodhall{background:var(--pin-gold);}
+  .artwalk{background:var(--pin-blue);}
+  .cityart{background:var(--pin-purple);}
+
+  .flyer h2{font-size:16px;margin:6px 0;}
+
+  .overlay{
+    position:fixed;inset:0;
+    background:rgba(0,0,0,0.8);
+    display:none;
+    justify-content:center;
+    align-items:center;
+  }
+
+  .overlay.open{display:flex;}
+
+  .detail,.formCard{
+    background:var(--paper2);
+    width:90%;
+    max-width:450px;
+    padding:20px;
+    max-height:90vh;
+    overflow:auto;
+  }
+
+  .big-close{
+    position:absolute;
+    right:20px;
+    top:20px;
+    cursor:pointer;
+    font-size:20px;
+  }
+
+  button{
+    cursor:pointer;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="topnav">
+  <button class="active" id="navBoard">Board</button>
+  <button id="navMap">Map</button>
+</div>
+
+<header>
+  <h1>CorkBoard</h1>
+</header>
+
+<div class="filters" id="filters">
+  <button class="chip active" data-filter="all">All</button>
+  <button class="chip" data-filter="market">Markets</button>
+  <button class="chip" data-filter="foodhall">Food Hall</button>
+  <button class="chip" data-filter="artwalk">Art</button>
+  <button class="chip" data-filter="cityart">City Art</button>
+</div>
+
+<div class="frame-wrap">
+  <div class="cork" id="cork"></div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div id="overlayInner"></div>
+</div>
+
+<script>
+const STORAGE_KEY = "corkboard-data";
+
+const defaultListings = [
+  {
+    id:"farmers",
+    cat:"market",
+    title:"Farmers Market",
+    when:"Wednesdays 9am–1:30pm",
+    where:"San Jose Downtown",
+    desc:"Local produce and food vendors"
+  },
+  {
+    id:"sofa",
+    cat:"foodhall",
+    title:"SoFA Market",
+    when:"Daily 11am–9pm",
+    where:"South 1st St",
+    desc:"Food hall with multiple vendors"
+  }
+];
+
+let listings = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultListings;
+let activeFilter = "all";
+
+const cork = document.getElementById("cork");
+const overlay = document.getElementById("overlay");
+const overlayInner = document.getElementById("overlayInner");
+
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
+}
+
+function render(){
+  cork.innerHTML = "";
+
+  listings.forEach(item=>{
+    const card = document.createElement("div");
+    card.className = "flyer " + item.cat;
+
+    if(activeFilter !== "all" && item.cat !== activeFilter){
+      card.classList.add("hidden");
+    }
+
+    card.innerHTML = `
+      <div class="pin-dot ${item.cat}"></div>
+      <h2>${item.title}</h2>
+      <div>${item.when}</div>
+      <div>${item.where}</div>
+    `;
+
+    card.onclick = ()=>openDetail(item.id);
+    cork.appendChild(card);
+  });
+
+  const add = document.createElement("div");
+  add.className = "flyer";
+  add.innerHTML = "+ Add Flyer";
+  add.onclick = openForm;
+  cork.appendChild(add);
+}
+
+function openDetail(id){
+  const item = listings.find(l=>l.id===id);
+
+  overlayInner.innerHTML = `
+    <div class="detail">
+      <div class="big-close" onclick="closeOverlay()">✕</div>
+      <h2>${item.title}</h2>
+      <p>${item.when}</p>
+      <p>${item.where}</p>
+      <p>${item.desc}</p>
+    </div>
+  `;
+
+  overlay.classList.add("open");
+}
+
+function closeOverlay(){
+  overlay.classList.remove("open");
+}
+
+function openForm(){
+  overlayInner.innerHTML = `
+    <div class="formCard">
+      <div class="big-close" onclick="closeOverlay()">✕</div>
+      <h2>Add Flyer</h2>
+
+      <input id="t" placeholder="Title"><br><br>
+      <input id="w" placeholder="When"><br><br>
+      <input id="l" placeholder="Where"><br><br>
+      <textarea id="d" placeholder="Description"></textarea><br><br>
+
+      <button onclick="submit()">Save</button>
+    </div>
+  `;
+
+  overlay.classList.add("open");
+}
+
+function submit(){
+  const newItem = {
+    id:Date.now().toString(),
+    cat:"market",
+    title:document.getElementById("t").value,
+    when:document.getElementById("w").value,
+    where:document.getElementById("l").value,
+    desc:document.getElementById("d").value
+  };
+
+  listings.push(newItem);
+  save();
+  closeOverlay();
+  render();
+}
+
+document.querySelectorAll(".chip").forEach(c=>{
+  c.onclick=()=>{
+    document.querySelectorAll(".chip").forEach(x=>x.classList.remove("active"));
+    c.classList.add("active");
+    activeFilter=c.dataset.filter;
+    render();
+  };
+});
+
+render();
+</script>
+
+</body>
+</html>
